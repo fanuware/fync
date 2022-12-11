@@ -7,6 +7,7 @@ import signal
 import logging
 import queue
 import datetime
+import subprocess
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, DirModifiedEvent, FileModifiedEvent
@@ -118,9 +119,13 @@ class WatchFilesRecursively(threading.Thread):
 
 def sync(command):
     logging.info(set_color(YELLOW) + 'Sync start ..')
-    exit_code = os.system(command)
-    logging.info(set_color(GREEN) + 'Sync complete')
-    return exit_code
+    try:
+        subprocess.check_output(command, shell=True)
+        logging.info(set_color(GREEN) + 'Sync complete')
+    except subprocess.CalledProcessError as error:
+        logging.info(set_color(RED) + 'Sync failed')
+        return error.returncode
+    return 0
 
 
 def cli():
@@ -199,15 +204,16 @@ def cli():
 
     # Handle termination
     def terminate_gracefully(signum, frame):
-        raise SystemExit('Terminate gracefully')
+        raise SystemExit(130)
     signal.signal(signal.SIGINT, terminate_gracefully)
     signal.signal(signal.SIGTERM, terminate_gracefully)
 
     try:
         while True:
             if watcher.update_queue.empty():
-                if sync(execute_cmd) != 0:
-                    raise SystemExit
+                exit_code = sync(execute_cmd)
+                if exit_code != 0:
+                    raise SystemExit(exit_code)
 
             # Get latest update
             last = watcher.update_queue.get()
@@ -217,6 +223,7 @@ def cli():
             remaining_delay = args.delay - (datetime.datetime.now() - last).total_seconds()
             if remaining_delay > 0:
                 time.sleep(remaining_delay)
-    except SystemExit:
+    except SystemExit as error:
         watcher.stop()
         logging.info('Service stopped')
+        return error.code
