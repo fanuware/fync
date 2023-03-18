@@ -1,4 +1,4 @@
 from .fync import cli
 
-cli()
-
+def main():
+    return cli()
