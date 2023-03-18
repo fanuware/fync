@@ -117,10 +117,12 @@ class WatchFilesRecursively(threading.Thread):
             self._stop_thread.wait(60)
 
 
-def sync(command):
+def sync(command, verbose):
     logging.info(set_color(YELLOW) + 'Sync start ..')
     try:
-        subprocess.check_output(command, shell=True)
+        output = subprocess.check_output(command, shell=True)
+        if verbose:
+            print(output.decode())
         logging.info(set_color(GREEN) + 'Sync complete')
     except subprocess.CalledProcessError as error:
         logging.info(set_color(RED) + 'Sync failed')
@@ -211,7 +213,7 @@ def cli():
     try:
         while True:
             if watcher.update_queue.empty():
-                exit_code = sync(execute_cmd)
+                exit_code = sync(execute_cmd, args.verbose)
                 if exit_code != 0:
                     raise SystemExit(exit_code)
 
