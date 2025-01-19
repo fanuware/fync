@@ -10,7 +10,9 @@ import datetime
 import subprocess
 
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, DirModifiedEvent, FileModifiedEvent
+from watchdog.events import DirModifiedEvent
+from watchdog.events import FileModifiedEvent
+from watchdog.events import FileSystemEventHandler
 
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 
@@ -22,9 +24,15 @@ def set_color(color):
 def reset_color():
     return '\033[0m'
 
+
+def on_wsl():
+    return os.name != 'nt' and 'WSLENV' in os.environ
+
+
 # Setup logger
-FORMAT_STYLE = '[%(asctime)s.%(msecs)03d] [%(levelname)s] %(message)s' + reset_color()
-DATE_FORMAT='%Y-%m-%d %H:%M:%S'
+FORMAT_STYLE = '[%(asctime)s.%(msecs)03d] [%(levelname)s] %(message)s' + \
+    reset_color()
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 logging.basicConfig(format=FORMAT_STYLE,
                     level=logging.INFO, datefmt=DATE_FORMAT)
 formatter = logging.Formatter(FORMAT_STYLE,
@@ -68,7 +76,7 @@ class WatchFilesRecursively(threading.Thread):
     def _callback_file_watchers(self, event):
         if (not event.is_directory and
             event.src_path in self.watch_file_dirs and
-            event.src_path not in self.exclude_paths):
+                event.src_path not in self.exclude_paths):
             self._notify_watchers(event)
 
     def _restart_file_watcher(self):
@@ -78,7 +86,7 @@ class WatchFilesRecursively(threading.Thread):
                 self._observer.stop()
             except SystemExit as system_exit:
                 raise system_exit
-            except:
+            except Exception:
                 pass
             self._observer_started = False
 
@@ -105,7 +113,7 @@ class WatchFilesRecursively(threading.Thread):
             self._observer_started = True
         except SystemExit as system_exit:
             raise system_exit
-        except:
+        except Exception:
             self._observer_started = False
 
     def run(self):
@@ -113,7 +121,7 @@ class WatchFilesRecursively(threading.Thread):
         while not self._stop_thread.is_set():
             if not self._observer_started:
                 self._restart_file_watcher()
-            #self._notify_watchers()
+            # self._notify_watchers()
             self._stop_thread.wait(60)
 
 
@@ -130,36 +138,45 @@ def sync(command, verbose):
     return 0
 
 
+def wsl_path(path):
+    output = subprocess.check_output(f'''wslpath -w {path}''', shell=True)
+    return output.split()[0].decode()
+
+
 def cli():
     parser = argparse.ArgumentParser(description='Automated file sync.')
 
     parser.add_argument('-e', '--exclude',
-        action='append',
-        nargs=1,
-        metavar=('exclude'),
-        default=[],
-        help='exclude path from observation')
+                        action='append',
+                        nargs=1,
+                        metavar=('exclude'),
+                        default=[],
+                        help='exclude path from observation')
+    if on_wsl():
+        parser.add_argument('--wsl',
+                            action='store_true',
+                            help='switch from WSL to fsync on Windows')
     parser.add_argument('-p', '--path',
-        action='append',
-        nargs=1,
-        metavar=('path'),
-        default=[],
-        help='add path to observation')
-    parser.add_argument('-d','--delay',
-        default=0.5,
-        type=float,
-        help='delay from observing a change until sync command is executed')
+                        action='append',
+                        nargs=1,
+                        metavar=('path'),
+                        default=[],
+                        help='add path to observation')
+    parser.add_argument('-d', '--delay',
+                        default=0.5,
+                        type=float,
+                        help='observing delay of sync command')
     parser.add_argument('-i', '--ignore',
-        action='store_true',
-        help='ignore path discovery. '
-             'Source path is discovered from known command including cp, scp and rsync (default)')
+                        action='store_true',
+                        help='ignore path discovery'
+                        'from command including cp, scp and rsync (default)')
     parser.add_argument('-v', '--verbose',
-        action='store_true',
-        help='verbose output')
+                        action='store_true',
+                        help='verbose output')
 
     parser.add_argument('command',
-        nargs=argparse.REMAINDER,
-        help='sync command (automatically triggered when an observed path updates)')
+                        nargs=argparse.REMAINDER,
+                        help='command (automatically triggered on observe)')
 
     args = parser.parse_args()
 
@@ -192,7 +209,8 @@ def cli():
                     print(discover_paths_to_observe)
                     break
             if args.verbose and discover_paths_to_observe:
-                print(f"Discovered paths to observe (from '{args.command[0]}' command):")
+                print(
+                    f"Path discovery of '{args.command[0]}':")
                 for path in discover_paths_to_observe:
                     print(f'- {path}')
         paths_to_observe += discover_paths_to_observe
@@ -200,6 +218,32 @@ def cli():
     execute_cmd = ' '.join(args.command)
     if args.verbose:
         print(f'Command: {execute_cmd}')
+
+    if on_wsl() and args.wsl:
+        paths_to_observe_win = [wsl_path(path) for path in paths_to_observe]
+        paths_args = ' ' + \
+            ' '.join([f'-p={dir}' for dir in paths_to_observe_win]
+                     ) if paths_to_observe_win else ''
+        exclude_win = [wsl_path(path) for path in args.exclude]
+        exclude_args = ' ' + \
+            ' '.join([f'-e={dir}' for dir in exclude_win]
+                     ) if exclude_win else ''
+        verbose_args = ' -v' if args.verbose else ''
+        try:
+            subprocess.check_output('''cmd.exe /c "where fync"''', shell=True)
+        except subprocess.CalledProcessError:
+            raise RuntimeError("Missing 'fync' on Windows")
+        if args.verbose:
+            print('Switch to fync on Windows')
+        command_win = (
+            f'cmd.exe /c "fync -i -d={args.delay}{verbose_args}'
+            f'{exclude_args}{paths_args} wsl {execute_cmd}"'
+        )
+        try:
+            subprocess.check_output(command_win, shell=True)
+        except KeyboardInterrupt:
+            pass
+        exit()
 
     watcher = WatchFilesRecursively(paths_to_observe, args.exclude)
     watcher.start()
@@ -222,7 +266,8 @@ def cli():
             while not watcher.update_queue.empty():
                 last = watcher.update_queue.get()
 
-            remaining_delay = args.delay - (datetime.datetime.now() - last).total_seconds()
+            remaining_delay = args.delay - \
+                (datetime.datetime.now() - last).total_seconds()
             if remaining_delay > 0:
                 time.sleep(remaining_delay)
     except SystemExit as error:
