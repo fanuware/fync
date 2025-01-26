@@ -1,5 +1,2 @@
-from .fync import cli
-
-
-def main():
-    return cli()
+from . import fync
+from . import get

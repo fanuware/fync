@@ -183,7 +183,7 @@ def cli():
     if args.exclude:
         args.exclude = list(map(lambda x: os.path.abspath(x[0]), args.exclude))
     if args.verbose and args.exclude:
-        print("Excluded paths:")
+        print('Excluded paths:')
         for path in args.exclude:
             print(f'- {path}')
 
@@ -194,7 +194,7 @@ def cli():
         parser.print_help()
         sys.exit(1)
     if args.verbose and paths_to_observe:
-        print("Paths to observe:")
+        print('Paths to observe:')
         for path in paths_to_observe:
             print(f'- {path}')
 
