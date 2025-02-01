@@ -18,8 +18,15 @@ dependencies = [
 fync = 'fync:fync.cli'
 fync-get = 'fync:get.cli'
 
-
-
 [build-system]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.9.4"
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.format]
+quote-style = "single"

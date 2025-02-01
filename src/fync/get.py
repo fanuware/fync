@@ -15,10 +15,12 @@ file_path = Path.home().joinpath('.fync-get')
 def url_request(url, opener):
     urllib.request.install_opener(opener)
     with tempfile.NamedTemporaryFile(
-            prefix='fync_', suffix='.download', delete=False) as temp_file:
+        prefix='fync_', suffix='.download', delete=False
+    ) as temp_file:
         try:
             temporary_filename, headers = urllib.request.urlretrieve(
-                url, temp_file.name)
+                url, temp_file.name
+            )
             filename = headers.get_filename()
             if filename:
                 shutil.move(temporary_filename, filename)
@@ -36,8 +38,9 @@ def download_bearer(url, token):
     opener = urllib.request.build_opener()
     opener.addheaders = [('Authorization', f'Bearer {token}')]
     result = url_request(url, opener)
-    print('Download (Authorization Bearer) ' +
-          ('done' if result else 'failed'))
+    print(
+        'Download (Authorization Bearer) ' + ('done' if result else 'failed')
+    )
     return result
 
 
@@ -48,8 +51,7 @@ def download_basic(url, username, password):
     auth_handler = urllib.request.HTTPBasicAuthHandler(password_manager)
     opener = urllib.request.build_opener(auth_handler)
     result = url_request(url, opener)
-    print('Download (Authorization Basic) ' +
-          ('done' if result else 'failed'))
+    print('Download (Authorization Basic) ' + ('done' if result else 'failed'))
     return result
 
 
@@ -65,10 +67,12 @@ def save_credentials(section, credentials):
 
 def cli():
     parser = argparse.ArgumentParser(description='File download.')
-    parser.add_argument('urls', nargs=argparse.REMAINDER,
-                        help='URLs to download from.')
-    parser.add_argument('--update', action='store_true',
-                        help='Update credentials')
+    parser.add_argument(
+        'urls', nargs=argparse.REMAINDER, help='URLs to download from.'
+    )
+    parser.add_argument(
+        '--update', action='store_true', help='Update credentials'
+    )
     args = parser.parse_args()
 
     if not args.urls:
@@ -96,7 +100,8 @@ def cli():
             save = input(f'({parsed_url.netloc}) Save credentials? [y/n]: ')
             if save.lower().startswith('y'):
                 save_credentials(
-                    section, {'username': username, 'password': password})
+                    section, {'username': username, 'password': password}
+                )
 
         if authorization == 'bearer':
             result = download_bearer(url, password)
@@ -109,8 +114,8 @@ def cli():
 
             if result:
                 save_credentials(
-                    section,
-                    {'authorization': 'bearer' if result else 'basic'})
+                    section, {'authorization': 'bearer' if result else 'basic'}
+                )
 
         if not result:
             exit(1)
