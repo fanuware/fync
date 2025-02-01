@@ -66,7 +66,9 @@ def save_credentials(section, credentials):
 
 
 def cli():
-    parser = argparse.ArgumentParser(description='File download.')
+    parser = argparse.ArgumentParser(
+        description='Authenticated file download.'
+    )
     parser.add_argument(
         'urls', nargs=argparse.REMAINDER, help='URLs to download from.'
     )
