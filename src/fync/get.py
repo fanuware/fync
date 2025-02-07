@@ -15,7 +15,7 @@ file_path = Path.home().joinpath('.fync-get')
 def url_request(url, opener):
     urllib.request.install_opener(opener)
     with tempfile.NamedTemporaryFile(
-        prefix='fync_', suffix='.download', delete=False
+        dir='.', prefix='fync_', suffix='.download', delete=False
     ) as temp_file:
         try:
             temporary_filename, headers = urllib.request.urlretrieve(
@@ -99,7 +99,7 @@ def cli():
         if update_credentials:
             username = input(f'({parsed_url.netloc}) Username: ')
             password = input(f'({parsed_url.netloc}) Password: ')
-            save = input(f'({parsed_url.netloc}) Save credentials? [y/n]: ')
+            save = input(f'({parsed_url.netloc}) Save credentials? [y/N]: ')
             if save.lower().startswith('y'):
                 save_credentials(
                     section, {'username': username, 'password': password}
