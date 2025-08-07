@@ -48,4 +48,12 @@ Authenticated file download
 
 ```bash
 fync-get <URL>
+fync-get --update <URL>
+```
+
+For example, you can download using **Bearer** or **Basic Authentication**.
+
+```bash
+fync-get https://httpbin.org/bearer
+fync-get https://httpbin.org/basic-auth/test-user/test-password
 ```

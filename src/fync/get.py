@@ -29,7 +29,8 @@ def url_request(url, opener):
         if not filename:
             parsed_url = urllib.parse.urlparse(url)
             filename = os.path.basename(parsed_url.path)
-
+        if not filename:
+            filename = 'download'
         filename_to_use = filename
         postfix_num = 1
         while os.path.exists(filename_to_use):
@@ -40,9 +41,11 @@ def url_request(url, opener):
         shutil.move(temporary_filename, filename_to_use)
         return filename_to_use
     except urllib.error.URLError as e:
-        print(f'Error downloading {url}: {e}')
+        print(f'- Error downloading {url}: {e}')
     except PermissionError as e:
-        print(f'Error Permission handling: {e}')
+        print(f'- Error downloading {url}: {e}')
+    except ValueError as e:
+        print(f'- Error downloading {url}: {e}')
     finally:
         if os.path.exists(temp_file.name):
             os.unlink(temp_file.name)
