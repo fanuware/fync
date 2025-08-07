@@ -1,5 +1,6 @@
 import argparse
 import configparser
+import getpass
 import os
 from pathlib import Path
 import tempfile
@@ -14,22 +15,37 @@ file_path = Path.home().joinpath('.fync-get')
 
 def url_request(url, opener):
     urllib.request.install_opener(opener)
-    with tempfile.NamedTemporaryFile(
-        dir='.', prefix='fync_', suffix='.download', delete=False
-    ) as temp_file:
-        try:
-            temporary_filename, headers = urllib.request.urlretrieve(
-                url, temp_file.name
-            )
-            filename = headers.get_filename()
-            if filename:
-                shutil.move(temporary_filename, filename)
-                return filename
-        except urllib.error.URLError as e:
-            print(f'Error downloading {url}: {e}')
-        finally:
-            if os.path.exists(temp_file.name):
-                os.unlink(temp_file.name)
+    try:
+        temp_file = tempfile.NamedTemporaryFile(
+            dir='.', prefix='fync_download_', delete=False
+        )
+        temp_filename = temp_file.name
+        temp_file.close()
+
+        temporary_filename, headers = urllib.request.urlretrieve(
+            url, temp_file.name
+        )
+        filename = headers.get_filename()
+        if not filename:
+            parsed_url = urllib.parse.urlparse(url)
+            filename = os.path.basename(parsed_url.path)
+
+        filename_to_use = filename
+        postfix_num = 1
+        while os.path.exists(filename_to_use):
+            name, ext = os.path.splitext(filename)
+            filename_to_use = f'{name}.{postfix_num}{ext}'
+            postfix_num += 1
+
+        shutil.move(temporary_filename, filename_to_use)
+        return filename_to_use
+    except urllib.error.URLError as e:
+        print(f'Error downloading {url}: {e}')
+    except PermissionError as e:
+        print(f'Error Permission handling: {e}')
+    finally:
+        if os.path.exists(temp_file.name):
+            os.unlink(temp_file.name)
     return None
 
 
@@ -39,7 +55,8 @@ def download_bearer(url, token):
     opener.addheaders = [('Authorization', f'Bearer {token}')]
     result = url_request(url, opener)
     print(
-        'Download (Authorization Bearer) ' + ('done' if result else 'failed')
+        'Download (Authorization Bearer) '
+        + (f"done: '{result}'" if result else 'failed')
     )
     return result
 
@@ -51,7 +68,10 @@ def download_basic(url, username, password):
     auth_handler = urllib.request.HTTPBasicAuthHandler(password_manager)
     opener = urllib.request.build_opener(auth_handler)
     result = url_request(url, opener)
-    print('Download (Authorization Basic) ' + ('done' if result else 'failed'))
+    print(
+        'Download (Authorization Basic) '
+        + (f"done: '{result}'" if result else 'failed')
+    )
     return result
 
 
@@ -90,34 +110,33 @@ def cli():
         update_credentials = args.update
         authorization = None
         try:
+            authorization = config[section].get('authorization')
             username = config[section]['username']
             password = config[section]['password']
-            authorization = config[section].get('authorization')
         except KeyError:
             update_credentials = True
 
         if update_credentials:
             username = input(f'({parsed_url.netloc}) Username: ')
-            password = input(f'({parsed_url.netloc}) Password: ')
+            password = getpass.getpass(f'({parsed_url.netloc}) Password: ')
             save = input(f'({parsed_url.netloc}) Save credentials? [y/N]: ')
             if save.lower().startswith('y'):
                 save_credentials(
                     section, {'username': username, 'password': password}
                 )
 
-        if authorization == 'bearer':
-            result = download_bearer(url, password)
-        elif authorization == 'basic':
-            result = download_basic(url, username, password)
-        else:
-            result = download_bearer(url, password)
-            if not result:
+        authorization_modes = ['basic', 'bearer']
+        if authorization in authorization_modes:
+            authorization_modes.remove(authorization)
+            authorization_modes.insert(0, authorization)
+        for auth in authorization_modes:
+            if auth == 'bearer':
+                result = download_bearer(url, password)
+            elif auth == 'basic':
                 result = download_basic(url, username, password)
-
             if result:
-                save_credentials(
-                    section, {'authorization': 'bearer' if result else 'basic'}
-                )
+                save_credentials(section, {'authorization': auth})
+                break
 
         if not result:
             exit(1)
