@@ -7,6 +7,7 @@ import signal
 import logging
 import queue
 import datetime
+import select
 import subprocess
 
 from watchdog.observers import Observer
@@ -147,6 +148,12 @@ def wsl_path(path):
 
 
 def cli():
+    stdin = []
+    rlist, _, _ = select.select([sys.stdin], [], [], 0)
+    if rlist:
+        stdin = sys.stdin.read().splitlines()
+        stdin = list(map(lambda x: os.path.abspath(x), stdin))
+
     parser = argparse.ArgumentParser(description='Automated file sync.')
 
     parser.add_argument(
@@ -198,6 +205,8 @@ def cli():
 
     args = parser.parse_args()
 
+    with_path_discovery = not (args.ignore or stdin)
+
     if args.exclude:
         args.exclude = list(map(lambda x: os.path.abspath(x[0]), args.exclude))
     if args.verbose and args.exclude:
@@ -207,7 +216,8 @@ def cli():
 
     if args.path:
         args.path = list(map(lambda x: os.path.abspath(x[0]), args.path))
-    paths_to_observe = args.path
+    paths_to_observe = args.path + stdin
+
     if not args.command:
         parser.print_help()
         sys.exit(1)
@@ -216,7 +226,7 @@ def cli():
         for path in paths_to_observe:
             print(f'- {path}')
 
-    if not args.ignore:
+    if with_path_discovery:
         discover_paths_to_observe = []
         if args.command[0] in (
             'cp',
